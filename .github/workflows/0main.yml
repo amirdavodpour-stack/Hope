@@ -1,0 +1,86 @@
+name: HOPE Flutter Auto Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "17"
+
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: "3.27.0"
+        channel: stable
+        cache: true
+
+
+    - name: Detect Flutter project
+      run: |
+        PROJECT=$(find . -name pubspec.yaml -not -path "*/build/*" | head -1)
+
+        if [ -z "$PROJECT" ]; then
+          echo "Flutter project not found"
+          exit 1
+        fi
+
+        echo "PROJECT_DIR=$(dirname $PROJECT)" >> $GITHUB_ENV
+
+
+    - name: Flutter dependencies
+      working-directory: ${{ env.PROJECT_DIR }}
+      run: |
+        flutter pub get
+
+
+    - name: Analyze
+      working-directory: ${{ env.PROJECT_DIR }}
+      continue-on-error: true
+      run: |
+        flutter analyze
+
+
+    - name: Tests
+      working-directory: ${{ env.PROJECT_DIR }}
+      continue-on-error: true
+      run: |
+        flutter test
+
+
+    - name: Build APK
+      working-directory: ${{ env.PROJECT_DIR }}
+      run: |
+        flutter build apk --release
+
+
+    - name: Find APK
+      run: |
+        find . -name "*.apk"
+
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: HOPE-release-apk
+        path: "**/build/app/outputs/flutter-apk/*.apk"
