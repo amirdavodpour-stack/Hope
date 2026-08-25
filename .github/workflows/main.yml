@@ -1,0 +1,19 @@
+git init
+
+git remote remove origin 2>/dev/null || true
+
+git remote add origin https://github.com/daviddavodpour-tech/Hope22.git
+
+git add .
+
+git commit -m "final android migration flutter build pipeline"
+
+git branch -M main
+
+git pull origin main --allow-unrelated-histories
+
+git add .
+
+git commit -m "merge final HOPE build configuration"
+
+git push origin main --force
