@@ -1,0 +1,186 @@
+name: HOPE Flutter Auto Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+
+permissions:
+  contents: write
+
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "17"
+
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: "3.27.0"
+        channel: stable
+        cache: true
+
+
+    - name: Scan repository
+      shell: bash
+      run: |
+
+        echo "===== Repository Tree ====="
+
+        find . -maxdepth 3 -type d | head -100
+
+        echo "===== Searching Flutter ====="
+
+        find . -name pubspec.yaml
+
+
+    - name: Extract ZIP projects
+      shell: bash
+      run: |
+
+        echo "Searching ZIP files..."
+
+        ZIP=$(find . -name "*.zip" | head -1)
+
+        if [ ! -z "$ZIP" ]; then
+
+          echo "ZIP found:"
+          echo $ZIP
+
+          mkdir -p extracted
+
+          unzip -o "$ZIP" -d extracted
+
+          echo "Extract completed"
+
+        else
+
+          echo "No ZIP found"
+
+        fi
+
+
+
+    - name: Detect Flutter project automatically
+      shell: bash
+      run: |
+
+        echo "Searching after extraction..."
+
+        PROJECT=$(find . \
+        -name pubspec.yaml \
+        -not -path "*/build/*" \
+        -not -path "*/.pub-cache/*" \
+        | head -1)
+
+
+        if [ -z "$PROJECT" ]; then
+
+          echo "Flutter project not found"
+
+          echo "Full scan:"
+          find . -maxdepth 5 -type f | head -200
+
+          exit 1
+
+        fi
+
+
+        PROJECT_DIR=$(dirname "$PROJECT")
+
+
+        echo "FOUND:"
+        echo "$PROJECT_DIR"
+
+
+        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+
+
+    - name: Flutter Doctor
+      working-directory: ${{ env.PROJECT_DIR }}
+      run: |
+
+        flutter doctor -v
+
+
+
+    - name: Upgrade dependencies
+      working-directory: ${{ env.PROJECT_DIR }}
+      run: |
+
+        flutter pub get
+        flutter pub outdated || true
+
+
+
+    - name: Analyze
+      working-directory: ${{ env.PROJECT_DIR }}
+      continue-on-error: true
+      run: |
+
+        flutter analyze
+
+
+
+    - name: Test
+      working-directory: ${{ env.PROJECT_DIR }}
+      continue-on-error: true
+      run: |
+
+        flutter test
+
+
+
+    - name: Android migration check
+      working-directory: ${{ env.PROJECT_DIR }}
+      continue-on-error: true
+      run: |
+
+        flutter build apk --debug \
+        --android-skip-build-dependency-validation
+
+
+
+    - name: Build Release APK
+      working-directory: ${{ env.PROJECT_DIR }}
+      run: |
+
+        flutter build apk --release
+
+
+
+    - name: Locate APK
+      run: |
+
+        find . -name "*.apk"
+
+
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+
+        name: HOPE-release-apk
+
+        path: "**/build/app/outputs/flutter-apk/*.apk"
